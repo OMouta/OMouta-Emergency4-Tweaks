@@ -122,25 +122,45 @@ scripts\package-release-vs2026-local.bat
 
 ## Adding Tweaks
 
-Tweaks are separate DLL modules under `src\hooks`.
+Tweaks are loaded as small packages. A package is a folder under:
 
-For example, the current borderless tweak lives here:
+```text
+OMoutasEM4Tweaks\Hooks\
+```
+
+The borderless fix ships like this:
+
+```text
+OMoutasEM4Tweaks\Hooks\BorderlessWindowFix\
+  BorderlessWindowFix.dll
+  tweak.ini
+```
+
+`tweak.ini` is what lets the launcher show the tweak by name and decide which
+DLL to inject:
+
+```ini
+[Tweak]
+id=borderless_window
+name=Borderless Window Fix
+description=Runs EM4 in a borderless window and reduces fullscreen-style focus behavior.
+version=1.0.0
+dll=BorderlessWindowFix.dll
+config_key=borderless_window
+default_enabled=1
+log=BorderlessWindowFix.log
+```
+
+The launcher discovers these folders automatically, so adding another packaged
+tweak does not require hardcoding its DLL name in the launcher.
+
+Source code for the current tweak lives here:
 
 ```text
 src\hooks\borderless\
 ```
 
-A new tweak can follow the same pattern:
-
-```text
-src\hooks\my-tweak\
-  HookEntry.cpp
-  MyTweak.h
-  MyTweak.cpp
-```
-
-Then add it to `CMakeLists.txt`, add a config toggle, and have the launcher load
-the DLL when that toggle is enabled.
+New built-in tweaks should follow the same package shape in the release folder.
 
 ## Contributing
 

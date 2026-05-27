@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT MSVC)
-    message(FATAL_ERROR "This project must be built with MSVC / Visual Studio 2022.")
+    message(FATAL_ERROR "This project must be built with MSVC.")
 endif()
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
@@ -27,6 +27,7 @@ add_executable(OMoutasEM4Tweaks
     src/launcher/main.cpp
     src/launcher/ConsoleMenu.cpp
     src/launcher/ProcessLauncher.cpp
+    src/launcher/TweakPackage.cpp
     resources/windows/OMoutasEM4Tweaks.rc
 )
 
@@ -67,9 +68,11 @@ target_include_directories(BorderlessWindowFix PRIVATE
 
 set_target_properties(BorderlessWindowFix PROPERTIES
     OUTPUT_NAME "BorderlessWindowFix"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/OMoutasEM4Tweaks/Hooks/BorderlessWindowFix"
 )
 
 add_custom_command(TARGET BorderlessWindowFix POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:OMoutasEM4Tweaks>/OMoutasEM4Tweaks/Hooks"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:BorderlessWindowFix>" "$<TARGET_FILE_DIR:OMoutasEM4Tweaks>/OMoutasEM4Tweaks/Hooks/$<TARGET_FILE_NAME:BorderlessWindowFix>"
+    COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:OMoutasEM4Tweaks>/$<TARGET_FILE_NAME:BorderlessWindowFix>"
+    COMMAND ${CMAKE_COMMAND} -E rm -f "$<TARGET_FILE_DIR:OMoutasEM4Tweaks>/OMoutasEM4Tweaks/Hooks/$<TARGET_FILE_NAME:BorderlessWindowFix>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/src/hooks/borderless/tweak.ini" "$<TARGET_FILE_DIR:BorderlessWindowFix>/tweak.ini"
 )
