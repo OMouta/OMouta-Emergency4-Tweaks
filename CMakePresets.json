@@ -1,0 +1,31 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "vs2022-win32",
+      "displayName": "Visual Studio 2022 Win32",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build-win32"
+    },
+    {
+      "name": "vs2026-win32-local",
+      "displayName": "Visual Studio 2026 Win32 Local",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build-win32-vs18"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release",
+      "configurePreset": "vs2022-win32",
+      "configuration": "Release"
+    },
+    {
+      "name": "release-vs2026-local",
+      "configurePreset": "vs2026-win32-local",
+      "configuration": "Release"
+    }
+  ]
+}
