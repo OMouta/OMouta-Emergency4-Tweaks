@@ -7,7 +7,7 @@
 namespace om4t {
 
 inline constexpr const wchar_t* kBrand = L"OMouta's EM4 Tweaks";
-inline constexpr const wchar_t* kDataDir = L"OMoutasEM4Tweaks";
+inline constexpr const wchar_t* kDataDir = L"OMoutaEM4Tweaks";
 inline constexpr const wchar_t* kHooksDir = L"Hooks";
 inline constexpr const wchar_t* kLogsDir = L"Logs";
 inline constexpr const wchar_t* kConfigName = L"config.ini";

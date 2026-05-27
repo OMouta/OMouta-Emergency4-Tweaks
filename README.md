@@ -8,9 +8,9 @@ OpenGL renderer.
 
 ## What It Does
 
-Start the game through `OMoutasEM4Tweaks.exe` instead of launching `em4.exe`
-directly. The launcher shows a short countdown, loads the enabled tweaks, then
-starts EM4.
+Start the game through `OMoutaEM4Tweaks.exe` instead of launching `em4.exe`
+directly. The launcher opens a small settings window, loads the enabled tweaks,
+then starts EM4.
 
 Current tweaks:
 
@@ -25,27 +25,21 @@ Extract the release next to `em4.exe`.
 Launch the game with:
 
 ```text
-OMoutasEM4Tweaks.exe
+OMoutaEM4Tweaks.exe
 ```
 
 ## Launcher
 
-When the launcher opens, it waits 5 seconds before starting the game.
-
-```text
-L = launch now
-E = edit settings
-C = cancel
-```
-
-If you do nothing, it launches automatically.
+When the launcher opens, it starts a short countdown before launching the game.
+You can launch immediately, cancel, browse for `em4.exe`, save settings, or
+toggle installed tweaks before the countdown finishes.
 
 ## Settings
 
 Settings are stored here:
 
 ```text
-OMoutasEM4Tweaks\config.ini
+OMoutaEM4Tweaks\config.ini
 ```
 
 Example:
@@ -65,14 +59,14 @@ height=1080
 keep_visible_on_focus_loss=1
 ```
 
-Most users can use the launcher menu instead of editing this file manually.
+Most users can use the launcher window instead of editing this file manually.
 
 ## Logs
 
 Logs are stored here:
 
 ```text
-OMoutasEM4Tweaks\Logs\
+OMoutaEM4Tweaks\Logs\
 ```
 
 Current log files:
@@ -110,7 +104,7 @@ scripts\package-release.bat
 The ready-to-zip output appears here:
 
 ```text
-dist\OMoutasEM4Tweaks\
+dist\OMoutaEM4Tweaks\
 ```
 
 For this development machine only, there are VS2026 helper scripts:
@@ -125,13 +119,13 @@ scripts\package-release-vs2026-local.bat
 Tweaks are loaded as small packages. A package is a folder under:
 
 ```text
-OMoutasEM4Tweaks\Hooks\
+OMoutaEM4Tweaks\Hooks\
 ```
 
 The borderless fix ships like this:
 
 ```text
-OMoutasEM4Tweaks\Hooks\BorderlessWindowFix\
+OMoutaEM4Tweaks\Hooks\BorderlessWindowFix\
   BorderlessWindowFix.dll
   tweak.ini
 ```

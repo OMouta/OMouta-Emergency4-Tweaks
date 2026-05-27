@@ -52,7 +52,7 @@ jobs:
 
           "version=$plainVersion" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
-          "archive=OMoutasEM4Tweaks-$plainVersion.zip" >> $env:GITHUB_OUTPUT
+          "archive=OMoutaEM4Tweaks-$plainVersion.zip" >> $env:GITHUB_OUTPUT
 
       - name: Fail if tag already exists
         shell: pwsh
@@ -75,7 +75,7 @@ jobs:
           if (Test-Path $archive) {
             Remove-Item $archive -Force
           }
-          Compress-Archive -Path "dist\OMoutasEM4Tweaks\*" -DestinationPath $archive -CompressionLevel Optimal
+          Compress-Archive -Path "dist\OMoutaEM4Tweaks\*" -DestinationPath $archive -CompressionLevel Optimal
 
       - name: Generate changelog
         id: changelog

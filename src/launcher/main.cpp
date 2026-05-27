@@ -1,4 +1,4 @@
-#include "ConsoleMenu.h"
+#include "GuiLauncher.h"
 #include "ProcessLauncher.h"
 #include "TweakPackage.h"
 
@@ -7,9 +7,9 @@
 #include "../shared/Logger.h"
 
 #include <windows.h>
+#include <shellapi.h>
 
 #include <fstream>
-#include <iostream>
 
 namespace {
 
@@ -39,8 +39,7 @@ std::filesystem::path resolve_em4_path(std::filesystem::path configured_path, co
 
 int fail(om4t::Logger& log, const std::wstring& message, DWORD code = 1) {
     log.write(message);
-    std::wcerr << message << L"\n";
-    system("pause");
+    MessageBoxW(nullptr, message.c_str(), om4t::kBrand, MB_OK | MB_ICONERROR);
     return static_cast<int>(code);
 }
 
@@ -77,10 +76,9 @@ void ensure_builtin_borderless_package(const std::filesystem::path& root) {
 
 } // namespace
 
-int wmain(int argc, wchar_t** argv) {
+int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     using namespace om4t;
 
-    SetConsoleTitleW(kBrand);
     const auto root = module_dir();
     ensure_app_layout(root);
 
@@ -89,8 +87,14 @@ int wmain(int argc, wchar_t** argv) {
 
     const auto cfg_path = config_path(root);
     Config config = load_config(cfg_path, root);
-    if (argc >= 2 && file_exists(argv[1])) {
+
+    int argc = 0;
+    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    if (argv && argc >= 2 && file_exists(argv[1])) {
         config.em4_path = std::filesystem::absolute(argv[1]);
+    }
+    if (argv) {
+        LocalFree(argv);
     }
     config.em4_path = resolve_em4_path(config.em4_path, root);
 
@@ -103,7 +107,7 @@ int wmain(int argc, wchar_t** argv) {
     launcher::apply_config_to_packages(config, packages);
     launcher::sync_config_from_packages(packages, config);
 
-    if (launcher::countdown_menu(config, packages, cfg_path) == launcher::MenuResult::Cancel) {
+    if (launcher::show_launcher_window(config, packages, cfg_path) == launcher::GuiResult::Cancel) {
         log.write(L"Launch cancelled by user");
         return 0;
     }

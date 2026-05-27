@@ -1,3 +1,3 @@
 #pragma once
 
-#define IDI_OMOUTAS_EM4_TWEAKS 101
+#define IDI_OMouta_EM4_TWEAKS 101
