@@ -1,0 +1,151 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 1.0.0 or v1.0.0"
+        required: true
+        type: string
+      draft:
+        description: "Create as draft release"
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark as prerelease"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build and publish release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ inputs.version }}".Trim()
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Version input cannot be empty."
+          }
+
+          if ($version.StartsWith("v")) {
+            $tag = $version
+            $plainVersion = $version.Substring(1)
+          } else {
+            $tag = "v$version"
+            $plainVersion = $version
+          }
+
+          "version=$plainVersion" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "archive=OMoutasEM4Tweaks-$plainVersion.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Fail if tag already exists
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          git fetch --tags --force
+          $existing = git tag --list $tag
+          if ($existing) {
+            throw "Tag '$tag' already exists. Pick a new version or delete the existing tag/release first."
+          }
+
+      - name: Build package
+        shell: cmd
+        run: scripts\package-release.bat
+
+      - name: Create zip archive
+        shell: pwsh
+        run: |
+          $archive = "${{ steps.version.outputs.archive }}"
+          if (Test-Path $archive) {
+            Remove-Item $archive -Force
+          }
+          Compress-Archive -Path "dist\OMoutasEM4Tweaks\*" -DestinationPath $archive -CompressionLevel Optimal
+
+      - name: Generate changelog
+        id: changelog
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.tag }}"
+          $allTags = @(git tag --sort=-creatordate)
+          $previousTag = $allTags | Where-Object { $_ -ne $tag } | Select-Object -First 1
+
+          if ($previousTag) {
+            $range = "$previousTag..HEAD"
+            $header = "Changes since $previousTag"
+            $compare = "https://github.com/${{ github.repository }}/compare/$previousTag...$tag"
+          } else {
+            $range = "HEAD"
+            $header = "Changes in this release"
+            $compare = $null
+          }
+
+          $commits = @(git log $range --pretty=format:"%h%x09%s")
+          $lines = New-Object System.Collections.Generic.List[string]
+          $seenSubjects = New-Object "System.Collections.Generic.HashSet[string]"
+
+          $lines.Add("# OMouta's EM4 Tweaks $tag")
+          $lines.Add("")
+          $lines.Add("## $header")
+          $lines.Add("")
+
+          if ($compare) {
+            $lines.Add("Compare: $compare")
+            $lines.Add("")
+          }
+
+          if ($commits.Count -eq 0) {
+            $lines.Add("- No commits found.")
+          } else {
+            foreach ($commit in $commits) {
+              $parts = $commit -split "`t", 2
+              $sha = $parts[0]
+              $subject = if ($parts.Count -gt 1) { $parts[1] } else { $commit }
+
+              if ($seenSubjects.Add($subject)) {
+                $lines.Add("- ``$sha`` $subject")
+              }
+            }
+          }
+
+          $notesPath = "release-notes.md"
+          $lines | Set-Content -Path $notesPath -Encoding UTF8
+          "notes=$notesPath" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $args = @(
+            "release", "create", "${{ steps.version.outputs.tag }}",
+            "${{ steps.version.outputs.archive }}",
+            "--target", "${{ github.sha }}",
+            "--title", "OMouta's EM4 Tweaks ${{ steps.version.outputs.tag }}",
+            "--notes-file", "${{ steps.changelog.outputs.notes }}"
+          )
+
+          if ("${{ inputs.draft }}" -eq "true") {
+            $args += "--draft"
+          }
+
+          if ("${{ inputs.prerelease }}" -eq "true") {
+            $args += "--prerelease"
+          }
+
+          gh @args
