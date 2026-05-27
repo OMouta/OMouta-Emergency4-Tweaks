@@ -1,4 +1,6 @@
-# OMouta's EM4 Tweaks
+<div align="center">
+  <img src="./assets/OMoutaTweaksIcon.png" alt="OMouta's EM4 Tweaks Logo" width="300" />
+</div>
 
 A lightweight launcher for **EMERGENCY 4** that can load optional fixes and
 tweaks before the game starts.
