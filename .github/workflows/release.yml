@@ -99,7 +99,7 @@ jobs:
           $lines = New-Object System.Collections.Generic.List[string]
           $seenSubjects = New-Object "System.Collections.Generic.HashSet[string]"
 
-          $lines.Add("# OMouta's EM4 Tweaks $tag")
+          $lines.Add("# Release $tag")
           $lines.Add("")
           $lines.Add("## $header")
           $lines.Add("")
