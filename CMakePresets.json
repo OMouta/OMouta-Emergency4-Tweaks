@@ -9,6 +9,13 @@
       "binaryDir": "${sourceDir}/build-win32"
     },
     {
+      "name": "vs2019-win32",
+      "displayName": "Visual Studio 2019 Win32",
+      "generator": "Visual Studio 16 2019",
+      "architecture": "Win32",
+      "binaryDir": "${sourceDir}/build-win32-vs16"
+    },
+    {
       "name": "vs2026-win32-local",
       "displayName": "Visual Studio 2026 Win32 Local",
       "generator": "Visual Studio 18 2026",
@@ -20,6 +27,11 @@
     {
       "name": "release",
       "configurePreset": "vs2022-win32",
+      "configuration": "Release"
+    },
+    {
+      "name": "release-vs2019",
+      "configurePreset": "vs2019-win32",
       "configuration": "Release"
     },
     {

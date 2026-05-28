@@ -86,7 +86,7 @@ Requirements:
 
 ```text
 Windows
-Visual Studio 2022
+Visual Studio 2019 or newer
 CMake
 Win32/x86 build tools
 ```
@@ -94,26 +94,34 @@ Win32/x86 build tools
 Build:
 
 ```bat
-scripts\rebuild-release.bat
+scripts\build.bat
 ```
 
 Create a release folder:
 
 ```bat
-scripts\package-release.bat
+scripts\build-dist.bat
 ```
 
-The ready-to-zip output appears here:
+Create a release archive:
+
+```bat
+scripts\build-package.bat
+```
+
+The release output appears here:
 
 ```text
 dist\OMoutaEM4Tweaks\
+dist\OMoutaEM4Tweaks.zip
 ```
 
-For this development machine only, there are VS2026 helper scripts:
+The build script auto-detects an existing build folder or installed Visual
+Studio version and uses the matching CMake preset. To override detection, set:
 
 ```bat
-scripts\rebuild-release-vs2026-local.bat
-scripts\package-release-vs2026-local.bat
+set OMOUTA_CMAKE_CONFIGURE_PRESET=vs2022-win32
+set OMOUTA_CMAKE_BUILD_PRESET=release
 ```
 
 ## Adding Tweaks

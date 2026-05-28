@@ -3,13 +3,21 @@ setlocal
 
 pushd "%~dp0\.." || exit /b 1
 
-set "BUILD_DIR=%~1"
-if "%BUILD_DIR%"=="" set "BUILD_DIR=build-win32\Release"
+call scripts\build.bat
+if errorlevel 1 (
+    popd
+    exit /b 1
+)
+
+call :detect_build_dir
+if errorlevel 1 (
+    popd
+    exit /b 1
+)
 
 set "DIST_DIR=dist\OMoutaEM4Tweaks"
 set "APP_DIR=%DIST_DIR%\OMoutaEM4Tweaks"
-set "HOOKS_DIR=%APP_DIR%\Hooks"
-set "BORDERLESS_DIR=%HOOKS_DIR%\BorderlessWindowFix"
+set "BORDERLESS_DIR=%APP_DIR%\Hooks\BorderlessWindowFix"
 set "LOGS_DIR=%APP_DIR%\Logs"
 
 if not exist "%BUILD_DIR%\OMoutaEM4Tweaks.exe" (
@@ -59,3 +67,17 @@ echo Created "%DIST_DIR%"
 
 popd
 exit /b 0
+
+:detect_build_dir
+if not "%OMOUTA_BUILD_DIR%"=="" (
+    set "BUILD_DIR=%OMOUTA_BUILD_DIR%"
+    exit /b 0
+)
+
+for /f "delims=" %%I in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$paths = @('build-win32-vs18\Release\OMoutaEM4Tweaks.exe', 'build-win32\Release\OMoutaEM4Tweaks.exe', 'build-win32-vs16\Release\OMoutaEM4Tweaks.exe'); $latest = Get-Item -LiteralPath $paths -ErrorAction SilentlyContinue | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1; if ($latest) { Split-Path -Parent $latest.FullName }"') do (
+    set "BUILD_DIR=%%I"
+    exit /b 0
+)
+
+echo Could not find a Release build output. Set OMOUTA_BUILD_DIR to override.
+exit /b 1
