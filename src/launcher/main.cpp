@@ -60,7 +60,10 @@ void ensure_builtin_borderless_package(const std::filesystem::path& root) {
         }
     }
 
-    if (om4t::file_exists(package_dll) && !om4t::file_exists(manifest)) {
+    const bool manifest_needs_defaults = !om4t::file_exists(manifest)
+        || om4t::read_ini_section(manifest, L"Settings").empty();
+
+    if (om4t::file_exists(package_dll) && manifest_needs_defaults) {
         std::wofstream output(manifest, std::ios::trunc);
         output << L"[Tweak]\n";
         output << L"id=borderless_window\n";
@@ -71,6 +74,12 @@ void ensure_builtin_borderless_package(const std::filesystem::path& root) {
         output << L"config_key=borderless_window\n";
         output << L"default_enabled=1\n";
         output << L"log=BorderlessWindowFix.log\n";
+        output << L"\n[Settings]\n";
+        output << L"x=BorderlessWindow|x|Window X|int|0\n";
+        output << L"y=BorderlessWindow|y|Window Y|int|0\n";
+        output << L"width=BorderlessWindow|width|Window Width|int|1920\n";
+        output << L"height=BorderlessWindow|height|Window Height|int|1080\n";
+        output << L"keep_visible_on_focus_loss=BorderlessWindow|keep_visible_on_focus_loss|Keep visible when focus changes|bool|1\n";
     }
 }
 

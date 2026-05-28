@@ -32,9 +32,20 @@ OMoutaEM4Tweaks.exe
 
 ## Launcher
 
-When the launcher opens, it starts a short countdown before launching the game.
-You can launch immediately, cancel, browse for `em4.exe`, save settings, or
-toggle installed tweaks before the countdown finishes.
+When the launcher opens, it shows a compact countdown screen. If you do
+nothing, the game launches after five seconds. Click **Settings** during the
+countdown to configure the launcher.
+
+The settings window has three tabs:
+
+| Tab | Purpose |
+| --- | --- |
+| General | Launcher-level settings such as the `em4.exe` path. |
+| Tweaks | Enable installed tweaks and edit each tweak's manifest-defined settings. |
+| About | Basic package and launcher information. |
+
+Settings are applied only when you click **Save & Launch** or **Save & Exit**.
+Closing the window or clicking **Exit** discards unsaved changes.
 
 ## Settings
 
@@ -153,10 +164,27 @@ dll=BorderlessWindowFix.dll
 config_key=borderless_window
 default_enabled=1
 log=BorderlessWindowFix.log
+
+[Settings]
+x=BorderlessWindow|x|Window X|int|0
+y=BorderlessWindow|y|Window Y|int|0
+width=BorderlessWindow|width|Window Width|int|1920
+height=BorderlessWindow|height|Window Height|int|1080
+keep_visible_on_focus_loss=BorderlessWindow|keep_visible_on_focus_loss|Keep visible when focus changes|bool|1
 ```
 
 The launcher discovers these folders automatically, so adding another packaged
 tweak does not require hardcoding its DLL name in the launcher.
+
+Each `[Settings]` entry uses:
+
+```text
+id=config_section|config_key|Label|type|default
+```
+
+Supported UI types are `text`, `int`, and `bool`. The launcher writes values to
+the requested config section and key, so tweak-specific settings do not need to
+be hardcoded into the launcher UI.
 
 Source code for the current tweak lives here:
 

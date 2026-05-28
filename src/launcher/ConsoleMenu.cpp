@@ -22,14 +22,21 @@ void show_tweaks(const std::vector<TweakPackage>& packages) {
     }
 }
 
+std::wstring setting_value(const Config& config, const TweakSetting& setting) {
+    if (auto section = config.sections.find(setting.section); section != config.sections.end()) {
+        if (auto value = section->second.find(setting.key); value != section->second.end()) {
+            return value->second;
+        }
+    }
+    return setting.default_value;
+}
+
 void show_settings(Config& config, std::vector<TweakPackage>& packages, const std::filesystem::path& config_path) {
     while (true) {
         std::wcout << L"\nSettings\n";
         show_tweaks(packages);
         std::wcout << L"T. Toggle a tweak\n";
-        std::wcout << L"F. Keep visible on focus loss: " << (config.keep_visible_on_focus_loss ? L"Enabled" : L"Disabled") << L"\n";
-        std::wcout << L"R. Window rectangle: " << config.borderless_x << L"," << config.borderless_y << L" "
-                   << config.borderless_width << L"x" << config.borderless_height << L"\n";
+        std::wcout << L"G. Change a tweak setting\n";
         std::wcout << L"P. EM4 path: " << config.em4_path.wstring() << L"\n";
         std::wcout << L"S. Save and return\n";
         std::wcout << L"Choice: ";
@@ -48,12 +55,28 @@ void show_settings(Config& config, std::vector<TweakPackage>& packages, const st
                 package.enabled = !package.enabled;
                 sync_config_from_packages(packages, config);
             }
-        } else if (choice == L"F" || choice == L"f") {
-            config.keep_visible_on_focus_loss = !config.keep_visible_on_focus_loss;
-        } else if (choice == L"R" || choice == L"r") {
-            std::wcout << L"Enter x y width height: ";
-            std::wcin >> config.borderless_x >> config.borderless_y >> config.borderless_width >> config.borderless_height;
+        } else if (choice == L"G" || choice == L"g") {
+            for (size_t i = 0; i < packages.size(); ++i) {
+                for (size_t j = 0; j < packages[i].settings.size(); ++j) {
+                    const auto& setting = packages[i].settings[j];
+                    std::wcout << (i + 1) << L"." << (j + 1) << L" " << packages[i].name
+                               << L" - " << setting.label << L": " << setting_value(config, setting) << L"\n";
+                }
+            }
+            std::wcout << L"Enter tweak number and setting number: ";
+            size_t package_number = 0;
+            size_t setting_number = 0;
+            std::wcin >> package_number >> setting_number;
             std::wcin.ignore(32767, L'\n');
+            if (package_number >= 1 && package_number <= packages.size()
+                && setting_number >= 1 && setting_number <= packages[package_number - 1].settings.size()) {
+                const auto& setting = packages[package_number - 1].settings[setting_number - 1];
+                std::wcout << L"Enter value: ";
+                std::wstring value;
+                std::getline(std::wcin, value);
+                config.sections[setting.section][setting.key] = trim(value);
+                sync_legacy_fields_from_sections(config);
+            }
         } else if (choice == L"P" || choice == L"p") {
             std::wcout << L"Enter full path to em4.exe: ";
             std::wstring path;

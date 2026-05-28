@@ -9,6 +9,15 @@
 
 namespace om4t::launcher {
 
+struct TweakSetting {
+    std::wstring id;
+    std::wstring section;
+    std::wstring key;
+    std::wstring label;
+    std::wstring type;
+    std::wstring default_value;
+};
+
 struct TweakPackage {
     std::wstring id;
     std::wstring name;
@@ -19,6 +28,7 @@ struct TweakPackage {
     std::wstring log_name;
     std::filesystem::path package_dir;
     std::filesystem::path dll_path;
+    std::vector<TweakSetting> settings;
     bool default_enabled = false;
     bool enabled = false;
 };

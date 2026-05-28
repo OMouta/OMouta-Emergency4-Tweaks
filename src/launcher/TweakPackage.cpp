@@ -4,6 +4,7 @@
 #include "../shared/StringUtil.h"
 
 #include <algorithm>
+#include <array>
 
 namespace om4t::launcher {
 
@@ -20,6 +21,7 @@ std::wstring value_or(const std::map<std::wstring, std::wstring>& values, const 
 
 bool manifest_to_package(const std::filesystem::path& manifest_path, TweakPackage& package, Logger& log) {
     const auto values = read_ini(manifest_path);
+    const auto settings = read_ini_section(manifest_path, L"Settings");
 
     package.id = value_or(values, L"id");
     package.name = value_or(values, L"name");
@@ -40,6 +42,34 @@ bool manifest_to_package(const std::filesystem::path& manifest_path, TweakPackag
     if (!file_exists(package.dll_path)) {
         log.write(L"Ignoring tweak with missing DLL: " + package.dll_path.wstring());
         return false;
+    }
+
+    for (const auto& [id, spec] : settings) {
+        std::array<std::wstring, 5> parts{};
+        size_t start = 0;
+        size_t part = 0;
+        while (part < parts.size()) {
+            const auto separator = spec.find(L'|', start);
+            parts[part++] = trim(spec.substr(start, separator == std::wstring::npos ? std::wstring::npos : separator - start));
+            if (separator == std::wstring::npos) {
+                break;
+            }
+            start = separator + 1;
+        }
+
+        if (parts[0].empty() || parts[1].empty() || parts[2].empty()) {
+            log.write(L"Ignoring invalid setting '" + id + L"' in " + manifest_path.wstring());
+            continue;
+        }
+
+        TweakSetting setting;
+        setting.id = id;
+        setting.section = parts[0];
+        setting.key = parts[1];
+        setting.label = parts[2];
+        setting.type = parts[3].empty() ? L"text" : parts[3];
+        setting.default_value = parts[4];
+        package.settings.push_back(std::move(setting));
     }
 
     return true;
@@ -100,6 +130,16 @@ void sync_config_from_packages(const std::vector<TweakPackage>& packages, Config
             config.borderless_enabled = package.enabled;
         }
     }
+
+    config.sections[L"Game"][L"em4_path"] = config.em4_path.wstring();
+    for (const auto& [key, enabled] : config.tweak_enabled) {
+        config.sections[L"Tweaks"][key] = enabled ? L"1" : L"0";
+    }
+    config.sections[L"BorderlessWindow"][L"x"] = std::to_wstring(config.borderless_x);
+    config.sections[L"BorderlessWindow"][L"y"] = std::to_wstring(config.borderless_y);
+    config.sections[L"BorderlessWindow"][L"width"] = std::to_wstring(config.borderless_width);
+    config.sections[L"BorderlessWindow"][L"height"] = std::to_wstring(config.borderless_height);
+    config.sections[L"BorderlessWindow"][L"keep_visible_on_focus_loss"] = config.keep_visible_on_focus_loss ? L"1" : L"0";
 }
 
 std::vector<std::filesystem::path> enabled_hook_paths(const std::vector<TweakPackage>& packages) {
