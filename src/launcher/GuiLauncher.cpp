@@ -165,7 +165,6 @@ void read_draft_controls(GuiState& state) {
         }
     }
 
-    sync_legacy_fields_from_sections(state.draft_config);
     sync_config_from_packages(state.draft_packages, state.draft_config);
 }
 

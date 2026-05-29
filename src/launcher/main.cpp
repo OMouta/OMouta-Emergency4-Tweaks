@@ -9,8 +9,6 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include <fstream>
-
 namespace {
 
 std::filesystem::path resolve_em4_path(std::filesystem::path configured_path, const std::filesystem::path& root) {
@@ -43,46 +41,6 @@ int fail(om4t::Logger& log, const std::wstring& message, DWORD code = 1) {
     return static_cast<int>(code);
 }
 
-void ensure_builtin_borderless_package(const std::filesystem::path& root) {
-    const auto package_dir = om4t::borderless_package_dir(root);
-    const auto package_dll = package_dir / om4t::kBorderlessDll;
-    const auto manifest = package_dir / om4t::kTweakManifestName;
-    const auto flat_hook = om4t::hooks_dir(root) / om4t::kBorderlessDll;
-    const auto legacy_root_hook = root / om4t::kBorderlessDll;
-
-    std::filesystem::create_directories(package_dir);
-
-    if (!om4t::file_exists(package_dll)) {
-        if (om4t::file_exists(flat_hook)) {
-            std::filesystem::copy_file(flat_hook, package_dll, std::filesystem::copy_options::overwrite_existing);
-        } else if (om4t::file_exists(legacy_root_hook)) {
-            std::filesystem::copy_file(legacy_root_hook, package_dll, std::filesystem::copy_options::overwrite_existing);
-        }
-    }
-
-    const bool manifest_needs_defaults = !om4t::file_exists(manifest)
-        || om4t::read_ini_section(manifest, L"Settings").empty();
-
-    if (om4t::file_exists(package_dll) && manifest_needs_defaults) {
-        std::wofstream output(manifest, std::ios::trunc);
-        output << L"[Tweak]\n";
-        output << L"id=borderless_window\n";
-        output << L"name=Borderless Window Fix\n";
-        output << L"description=Runs EM4 in a borderless window and reduces fullscreen-style focus behavior.\n";
-        output << L"version=1.0.0\n";
-        output << L"dll=BorderlessWindowFix.dll\n";
-        output << L"config_key=borderless_window\n";
-        output << L"default_enabled=1\n";
-        output << L"log=BorderlessWindowFix.log\n";
-        output << L"\n[Settings]\n";
-        output << L"x=BorderlessWindow|x|Window X|int|0\n";
-        output << L"y=BorderlessWindow|y|Window Y|int|0\n";
-        output << L"width=BorderlessWindow|width|Window Width|int|1920\n";
-        output << L"height=BorderlessWindow|height|Window Height|int|1080\n";
-        output << L"keep_visible_on_focus_loss=BorderlessWindow|keep_visible_on_focus_loss|Keep visible when focus changes|bool|1\n";
-    }
-}
-
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -107,14 +65,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     config.em4_path = resolve_em4_path(config.em4_path, root);
 
-    if (!file_exists(cfg_path)) {
-        write_config(cfg_path, config);
-    }
-
-    ensure_builtin_borderless_package(root);
     auto packages = launcher::discover_tweak_packages(root, log);
     launcher::apply_config_to_packages(config, packages);
     launcher::sync_config_from_packages(packages, config);
+    if (!file_exists(cfg_path)) {
+        write_config(cfg_path, config);
+    }
 
     if (launcher::show_launcher_window(config, packages, cfg_path) == launcher::GuiResult::Cancel) {
         log.write(L"Launch cancelled by user");

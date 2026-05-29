@@ -82,12 +82,8 @@ Logs are stored here:
 OMoutaEM4Tweaks\Logs\
 ```
 
-Current log files:
-
-```text
-Launcher.log
-BorderlessWindowFix.log
-```
+Each tweak can create its own log file. The launcher itself writes
+`Launcher.log`.
 
 If something breaks, these files are the first place to check.
 
@@ -182,9 +178,10 @@ Each `[Settings]` entry uses:
 id=config_section|config_key|Label|type|default
 ```
 
-Supported UI types are `text`, `int`, and `bool`. The launcher writes values to
-the requested config section and key, so tweak-specific settings do not need to
-be hardcoded into the launcher UI.
+Supported UI types are `text`, `int`, and `bool`. `config_key` is optional; if
+it is omitted, the launcher uses the tweak `id` as the key in `[Tweaks]`. The
+launcher writes values to the requested config section and key, so
+tweak-specific settings do not need to be hardcoded into the launcher UI.
 
 Source code for the current tweak lives here:
 

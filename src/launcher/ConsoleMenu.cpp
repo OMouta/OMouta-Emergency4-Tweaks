@@ -75,7 +75,6 @@ void show_settings(Config& config, std::vector<TweakPackage>& packages, const st
                 std::wstring value;
                 std::getline(std::wcin, value);
                 config.sections[setting.section][setting.key] = trim(value);
-                sync_legacy_fields_from_sections(config);
             }
         } else if (choice == L"P" || choice == L"p") {
             std::wcout << L"Enter full path to em4.exe: ";

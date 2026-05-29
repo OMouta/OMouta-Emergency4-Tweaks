@@ -20,14 +20,14 @@ std::wstring value_or(const std::map<std::wstring, std::wstring>& values, const 
 }
 
 bool manifest_to_package(const std::filesystem::path& manifest_path, TweakPackage& package, Logger& log) {
-    const auto values = read_ini(manifest_path);
+    const auto values = read_ini_section(manifest_path, L"Tweak");
     const auto settings = read_ini_section(manifest_path, L"Settings");
 
     package.id = value_or(values, L"id");
     package.name = value_or(values, L"name");
     package.description = value_or(values, L"description");
     package.version = value_or(values, L"version", L"1.0.0");
-    package.config_key = value_or(values, L"config_key");
+    package.config_key = value_or(values, L"config_key", package.id.c_str());
     package.dll_name = value_or(values, L"dll");
     package.log_name = value_or(values, L"log");
     package.default_enabled = parse_bool(value_or(values, L"default_enabled", L"0"), false);
@@ -124,22 +124,26 @@ void apply_config_to_packages(const Config& config, std::vector<TweakPackage>& p
 }
 
 void sync_config_from_packages(const std::vector<TweakPackage>& packages, Config& config) {
+    config.tweak_enabled.clear();
+    config.sections[L"Tweaks"].clear();
+
     for (const auto& package : packages) {
         config.tweak_enabled[package.config_key] = package.enabled;
-        if (package.config_key == L"borderless_window") {
-            config.borderless_enabled = package.enabled;
+        config.sections[L"Tweaks"][package.config_key] = package.enabled ? L"1" : L"0";
+
+        for (const auto& setting : package.settings) {
+            if (setting.section.empty() || setting.key.empty()) {
+                continue;
+            }
+
+            auto& section = config.sections[setting.section];
+            if (auto value = section.find(setting.key); value == section.end()) {
+                section[setting.key] = setting.default_value;
+            }
         }
     }
 
     config.sections[L"Game"][L"em4_path"] = config.em4_path.wstring();
-    for (const auto& [key, enabled] : config.tweak_enabled) {
-        config.sections[L"Tweaks"][key] = enabled ? L"1" : L"0";
-    }
-    config.sections[L"BorderlessWindow"][L"x"] = std::to_wstring(config.borderless_x);
-    config.sections[L"BorderlessWindow"][L"y"] = std::to_wstring(config.borderless_y);
-    config.sections[L"BorderlessWindow"][L"width"] = std::to_wstring(config.borderless_width);
-    config.sections[L"BorderlessWindow"][L"height"] = std::to_wstring(config.borderless_height);
-    config.sections[L"BorderlessWindow"][L"keep_visible_on_focus_loss"] = config.keep_visible_on_focus_loss ? L"1" : L"0";
 }
 
 std::vector<std::filesystem::path> enabled_hook_paths(const std::vector<TweakPackage>& packages) {

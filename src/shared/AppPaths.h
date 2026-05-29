@@ -12,10 +12,6 @@ inline constexpr const wchar_t* kHooksDir = L"Hooks";
 inline constexpr const wchar_t* kLogsDir = L"Logs";
 inline constexpr const wchar_t* kConfigName = L"config.ini";
 inline constexpr const wchar_t* kLauncherLogName = L"Launcher.log";
-inline constexpr const wchar_t* kBorderlessLogName = L"BorderlessWindowFix.log";
-inline constexpr const wchar_t* kBorderlessDll = L"BorderlessWindowFix.dll";
-inline constexpr const wchar_t* kBorderlessPackageDir = L"BorderlessWindowFix";
-inline constexpr const wchar_t* kTweakManifestName = L"tweak.ini";
 
 inline std::filesystem::path module_dir() {
     wchar_t path[MAX_PATH]{};
@@ -43,10 +39,6 @@ inline std::filesystem::path log_path(const std::filesystem::path& root, const w
 
 inline std::filesystem::path hooks_dir(const std::filesystem::path& root) {
     return root / kDataDir / kHooksDir;
-}
-
-inline std::filesystem::path borderless_package_dir(const std::filesystem::path& root) {
-    return hooks_dir(root) / kBorderlessPackageDir;
 }
 
 } // namespace om4t
