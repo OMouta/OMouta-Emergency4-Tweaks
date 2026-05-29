@@ -5,8 +5,8 @@
 A lightweight launcher for **EMERGENCY 4** that can load optional fixes and
 tweaks before the game starts.
 
-The current release includes one tweak: a borderless window fix for EM4's
-OpenGL renderer.
+Tweaks are packaged as independent hook DLLs that the launcher discovers at
+runtime.
 
 ## What It Does
 
@@ -14,11 +14,11 @@ Start the game through `OMoutaEM4Tweaks.exe` instead of launching `em4.exe`
 directly. The launcher opens a small settings window, loads the enabled tweaks,
 then starts EM4.
 
-Current tweaks:
+Current tweak packages:
 
 | Tweak | Description |
 | --- | --- |
-| Borderless Window Fix | Runs EM4 in a 1920x1080 borderless window and prevents several fullscreen-style behaviors. |
+| Engine Probe | Collects observe-only runtime diagnostics for future tweak development. |
 
 ## Installation
 
@@ -62,14 +62,7 @@ Example:
 em4_path=em4.exe
 
 [Tweaks]
-borderless_window=1
-
-[BorderlessWindow]
-x=0
-y=0
-width=1920
-height=1080
-keep_visible_on_focus_loss=1
+; tweak enablement is added here when hook packages are installed
 ```
 
 Most users can use the launcher window instead of editing this file manually.
@@ -139,11 +132,11 @@ Tweaks are loaded as small packages. A package is a folder under:
 OMoutaEM4Tweaks\Hooks\
 ```
 
-The borderless fix ships like this:
+The engine probe ships like this:
 
 ```text
-OMoutaEM4Tweaks\Hooks\BorderlessWindowFix\
-  BorderlessWindowFix.dll
+OMoutaEM4Tweaks\Hooks\EngineProbe\
+  EngineProbe.dll
   tweak.ini
 ```
 
@@ -152,21 +145,19 @@ DLL to inject:
 
 ```ini
 [Tweak]
-id=borderless_window
-name=Borderless Window Fix
-description=Runs EM4 in a borderless window and reduces fullscreen-style focus behavior.
-version=1.0.0
-dll=BorderlessWindowFix.dll
-config_key=borderless_window
+id=engine_probe
+name=Engine Probe
+description=Collects observe-only runtime diagnostics for EM4 engine and tweak development.
+version=0.1.0
+dll=EngineProbe.dll
+config_key=engine_probe
 default_enabled=1
-log=BorderlessWindowFix.log
+log=EngineProbe.log
 
 [Settings]
-x=BorderlessWindow|x|Window X|int|0
-y=BorderlessWindow|y|Window Y|int|0
-width=BorderlessWindow|width|Window Width|int|1920
-height=BorderlessWindow|height|Window Height|int|1080
-keep_visible_on_focus_loss=BorderlessWindow|keep_visible_on_focus_loss|Keep visible when focus changes|bool|1
+trace_file_io=EngineProbe|trace_file_io|Trace file opens and reads|bool|1
+trace_windows=EngineProbe|trace_windows|Trace game windows|bool|1
+trace_opengl=EngineProbe|trace_opengl|Trace OpenGL bootstrap|bool|1
 ```
 
 The launcher discovers these folders automatically, so adding another packaged
@@ -183,13 +174,22 @@ it is omitted, the launcher uses the tweak `id` as the key in `[Tweaks]`. The
 launcher writes values to the requested config section and key, so
 tweak-specific settings do not need to be hardcoded into the launcher UI.
 
-Source code for the current tweak lives here:
+Each built-in hook should live in its own source folder:
 
 ```text
-src\hooks\borderless\
+src\hooks\<hook-name>\
 ```
 
-New built-in tweaks should follow the same package shape in the release folder.
+Each hook folder owns its own `CMakeLists.txt`. Add the DLL target there, then
+call `omouta_configure_hook_package(...)` so the build places the DLL and
+`tweak.ini` under:
+
+```text
+OMoutaEM4Tweaks\Hooks\<PackageName>\
+```
+
+The top-level hooks CMake file discovers hook folders automatically, so adding
+another built-in tweak should not require editing the launcher target.
 
 ## Contributing
 
