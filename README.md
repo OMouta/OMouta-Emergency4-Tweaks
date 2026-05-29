@@ -156,6 +156,8 @@ log=EngineProbe.log
 
 [Settings]
 trace_file_io=EngineProbe|trace_file_io|Trace file opens and reads|bool|1
+trace_game_root_only=EngineProbe|trace_game_root_only|Only trace files under the game folder|bool|1
+trace_game_logfile=EngineProbe|trace_game_logfile|Include EM4 logfile.txt in file trace|bool|0
 trace_windows=EngineProbe|trace_windows|Trace game windows|bool|1
 trace_opengl=EngineProbe|trace_opengl|Trace OpenGL bootstrap|bool|1
 ```

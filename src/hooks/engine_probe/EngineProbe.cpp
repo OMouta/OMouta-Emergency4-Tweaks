@@ -22,6 +22,7 @@ constexpr const wchar_t* kLogsDir = L"Logs";
 constexpr const wchar_t* kConfigName = L"config.ini";
 constexpr const wchar_t* kLogName = L"EngineProbe.log";
 constexpr const wchar_t* kModuleName = L"EngineProbe.modules.txt";
+constexpr const wchar_t* kModuleAfterOpenGlName = L"EngineProbe.modules.after_opengl.txt";
 constexpr const wchar_t* kFileIoName = L"EngineProbe.fileio.csv";
 
 using CreateWindowExA_t = HWND(WINAPI*)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
@@ -40,6 +41,8 @@ std::mutex g_file_mutex;
 std::mutex g_handle_mutex;
 std::map<HANDLE, std::wstring> g_handle_paths;
 std::atomic<bool> g_trace_file_io{true};
+std::atomic<bool> g_trace_game_root_only{true};
+std::atomic<bool> g_trace_game_logfile{false};
 std::atomic<bool> g_trace_windows{true};
 std::atomic<bool> g_trace_opengl{true};
 std::atomic<bool> g_opengl_logged{false};
@@ -64,6 +67,22 @@ std::filesystem::path process_directory() {
     wchar_t path[MAX_PATH]{};
     GetModuleFileNameW(nullptr, path, MAX_PATH);
     return std::filesystem::path(path).parent_path();
+}
+
+std::wstring normalized_path(std::wstring path) {
+    for (auto& ch : path) {
+        if (ch == L'/') {
+            ch = L'\\';
+        }
+    }
+    return path;
+}
+
+std::wstring lower_copy(std::wstring value) {
+    for (auto& ch : value) {
+        ch = static_cast<wchar_t>(towlower(ch));
+    }
+    return value;
 }
 
 std::filesystem::path log_directory() {
@@ -180,6 +199,12 @@ void load_config() {
         if (auto it = section->second.find(L"trace_file_io"); it != section->second.end()) {
             g_trace_file_io = parse_bool(it->second, true);
         }
+        if (auto it = section->second.find(L"trace_game_root_only"); it != section->second.end()) {
+            g_trace_game_root_only = parse_bool(it->second, true);
+        }
+        if (auto it = section->second.find(L"trace_game_logfile"); it != section->second.end()) {
+            g_trace_game_logfile = parse_bool(it->second, false);
+        }
         if (auto it = section->second.find(L"trace_windows"); it != section->second.end()) {
             g_trace_windows = parse_bool(it->second, true);
         }
@@ -187,6 +212,37 @@ void load_config() {
             g_trace_opengl = parse_bool(it->second, true);
         }
     }
+}
+
+bool starts_with_i(const std::wstring& value, const std::wstring& prefix) {
+    const auto lower_value = lower_copy(value);
+    const auto lower_prefix = lower_copy(prefix);
+    return lower_value.rfind(lower_prefix, 0) == 0;
+}
+
+bool ends_with_i(const std::wstring& value, const std::wstring& suffix) {
+    const auto lower_value = lower_copy(value);
+    const auto lower_suffix = lower_copy(suffix);
+    return lower_value.size() >= lower_suffix.size()
+        && lower_value.compare(lower_value.size() - lower_suffix.size(), lower_suffix.size(), lower_suffix) == 0;
+}
+
+bool should_trace_path(const std::wstring& path) {
+    if (!g_trace_file_io.load() || path.empty()) {
+        return false;
+    }
+
+    const auto normalized = normalized_path(path);
+    const auto root = normalized_path(process_directory().wstring());
+    if (g_trace_game_root_only.load() && !starts_with_i(normalized, root)) {
+        return false;
+    }
+
+    if (!g_trace_game_logfile.load() && ends_with_i(normalized, L"\\logfile.txt")) {
+        return false;
+    }
+
+    return true;
 }
 
 void initialize_logs() {
@@ -199,11 +255,9 @@ void initialize_logs() {
 
     {
         std::lock_guard<std::mutex> lock(g_file_mutex);
-        g_fileio.open(log_directory() / kFileIoName, std::ios::app);
-        if (g_fileio.tellp() == 0) {
-            g_fileio << "event,tick,handle,path,bytes,ok,last_error\n";
-            g_fileio.flush();
-        }
+        g_fileio.open(log_directory() / kFileIoName, std::ios::trunc);
+        g_fileio << "event,tick,handle,path,bytes,ok,last_error\n";
+        g_fileio.flush();
     }
 }
 
@@ -218,7 +272,7 @@ void fileio_line(const std::wstring& event, HANDLE handle, const std::wstring& p
         g_fileio << narrow(event) << ','
                  << GetTickCount64() << ','
                  << reinterpret_cast<uintptr_t>(handle) << ",\""
-                 << narrow(path) << "\","
+                 << narrow(normalized_path(path)) << "\","
                  << bytes << ','
                  << (ok ? 1 : 0) << ','
                  << error << '\n';
@@ -227,8 +281,8 @@ void fileio_line(const std::wstring& event, HANDLE handle, const std::wstring& p
     g_inside_probe = false;
 }
 
-void write_module_snapshot() {
-    std::wofstream output(log_directory() / kModuleName, std::ios::trunc);
+void write_module_snapshot(const wchar_t* file_name) {
+    std::wofstream output(log_directory() / file_name, std::ios::trunc);
     if (!output.is_open()) {
         log_last_error(L"Could not open module snapshot.");
         return;
@@ -321,6 +375,8 @@ void log_opengl() {
             + L" has_GL_ARB_multitexture=" + std::to_wstring(wide_extensions.find(L"GL_ARB_multitexture") != std::wstring::npos)
             + L" has_GL_ARB_vertex_buffer_object=" + std::to_wstring(wide_extensions.find(L"GL_ARB_vertex_buffer_object") != std::wstring::npos));
     }
+
+    write_module_snapshot(kModuleAfterOpenGlName);
 }
 
 LONG CALLBACK vectored_exception_handler(PEXCEPTION_POINTERS exception) {
@@ -373,22 +429,26 @@ HWND WINAPI hook_create_window_ex_w(DWORD ex_style, LPCWSTR class_name, LPCWSTR 
 HANDLE WINAPI hook_create_file_a(LPCSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD flags, HANDLE template_file) {
     HANDLE handle = g_create_file_a(path, access, share, security, creation, flags, template_file);
     const std::wstring wide_path = widen(path);
-    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe) {
+    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(wide_path)) {
         std::lock_guard<std::mutex> lock(g_handle_mutex);
-        g_handle_paths[handle] = wide_path;
+        g_handle_paths[handle] = normalized_path(wide_path);
     }
-    fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
+    if (should_trace_path(wide_path)) {
+        fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
+    }
     return handle;
 }
 
 HANDLE WINAPI hook_create_file_w(LPCWSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD flags, HANDLE template_file) {
     HANDLE handle = g_create_file_w(path, access, share, security, creation, flags, template_file);
     const std::wstring wide_path = path ? path : L"";
-    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe) {
+    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(wide_path)) {
         std::lock_guard<std::mutex> lock(g_handle_mutex);
-        g_handle_paths[handle] = wide_path;
+        g_handle_paths[handle] = normalized_path(wide_path);
     }
-    fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
+    if (should_trace_path(wide_path)) {
+        fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
+    }
     return handle;
 }
 
@@ -481,9 +541,11 @@ DWORD WINAPI worker_thread(LPVOID) {
     load_config();
     log_line(L"DLL loaded");
     log_line(L"Config trace_file_io=" + std::to_wstring(g_trace_file_io.load())
+        + L" trace_game_root_only=" + std::to_wstring(g_trace_game_root_only.load())
+        + L" trace_game_logfile=" + std::to_wstring(g_trace_game_logfile.load())
         + L" trace_windows=" + std::to_wstring(g_trace_windows.load())
         + L" trace_opengl=" + std::to_wstring(g_trace_opengl.load()));
-    write_module_snapshot();
+    write_module_snapshot(kModuleName);
     AddVectoredExceptionHandler(1, vectored_exception_handler);
 
     MH_STATUS status = MH_Initialize();
