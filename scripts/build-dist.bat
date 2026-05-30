@@ -18,6 +18,7 @@ if errorlevel 1 (
 set "DIST_DIR=dist\OMoutaEM4Tweaks"
 set "APP_DIR=%DIST_DIR%\OMoutaEM4Tweaks"
 set "LOGS_DIR=%APP_DIR%\Logs"
+set "RUNTIME_DIR=%APP_DIR%\Runtime"
 
 if not exist "%BUILD_DIR%\OMoutaEM4Tweaks.exe" (
     echo Missing launcher: "%BUILD_DIR%\OMoutaEM4Tweaks.exe"
@@ -29,8 +30,12 @@ if exist dist rmdir /s /q dist
 
 mkdir "%APP_DIR%\Hooks" || exit /b 1
 mkdir "%LOGS_DIR%" || exit /b 1
+mkdir "%RUNTIME_DIR%" || exit /b 1
 
 copy /y "%BUILD_DIR%\OMoutaEM4Tweaks.exe" "%DIST_DIR%\" >nul || exit /b 1
+if exist "%BUILD_DIR%\OMoutaEM4Tweaks\Runtime\TweakRuntime.dll" (
+    copy /y "%BUILD_DIR%\OMoutaEM4Tweaks\Runtime\TweakRuntime.dll" "%RUNTIME_DIR%\" >nul || exit /b 1
+)
 if exist "%BUILD_DIR%\OMoutaEM4Tweaks\Hooks" (
     xcopy /e /i /y "%BUILD_DIR%\OMoutaEM4Tweaks\Hooks" "%APP_DIR%\Hooks" >nul || exit /b 1
 )

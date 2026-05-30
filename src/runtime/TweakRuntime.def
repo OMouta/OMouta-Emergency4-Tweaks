@@ -1,0 +1,5 @@
+LIBRARY TweakRuntime
+
+EXPORTS
+    OM4T_RegisterFileOpenCallback=_OM4T_RegisterFileOpenCallback@12
+    OM4T_RegisterFileOpenedCallback=_OM4T_RegisterFileOpenedCallback@12

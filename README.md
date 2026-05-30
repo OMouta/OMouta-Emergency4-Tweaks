@@ -19,6 +19,7 @@ Current tweak packages:
 | Tweak | Description |
 | --- | --- |
 | Engine Probe | Collects observe-only runtime diagnostics for future tweak development. |
+| Startup Movie Skip | Skips startup intro movies while leaving menu/background videos alone. |
 
 ## Installation
 

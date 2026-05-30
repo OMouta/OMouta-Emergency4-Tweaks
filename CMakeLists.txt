@@ -46,3 +46,4 @@ set_target_properties(OMoutaEM4Tweaks PROPERTIES
 )
 
 add_subdirectory(src/hooks)
+add_subdirectory(src/runtime)

@@ -87,6 +87,18 @@ bool launch_game_with_hooks(
         return false;
     }
 
+    const auto runtime_path = absolute_em4_path.parent_path() / L"OMoutaEM4Tweaks" / L"Runtime" / L"TweakRuntime.dll";
+    if (std::filesystem::exists(runtime_path)) {
+        if (!inject_dll(pi.hProcess, runtime_path, log)) {
+            TerminateProcess(pi.hProcess, 6);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            return false;
+        }
+    } else {
+        log.write(L"No tweak runtime found: " + runtime_path.wstring());
+    }
+
     for (const auto& hook : enabled_hooks) {
         if (!inject_dll(pi.hProcess, std::filesystem::absolute(hook), log)) {
             TerminateProcess(pi.hProcess, 4);

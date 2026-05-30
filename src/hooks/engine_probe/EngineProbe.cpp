@@ -1,5 +1,7 @@
 #include "EngineProbe.h"
 
+#include "../../runtime/TweakRuntimeApi.h"
+
 #include <windows.h>
 #include <tlhelp32.h>
 #include <gl/GL.h>
@@ -27,8 +29,6 @@ constexpr const wchar_t* kFileIoName = L"EngineProbe.fileio.csv";
 
 using CreateWindowExA_t = HWND(WINAPI*)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 using CreateWindowExW_t = HWND(WINAPI*)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
-using CreateFileA_t = HANDLE(WINAPI*)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-using CreateFileW_t = HANDLE(WINAPI*)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 using ReadFile_t = BOOL(WINAPI*)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
 using CloseHandle_t = BOOL(WINAPI*)(HANDLE);
 using wglCreateContext_t = HGLRC(WINAPI*)(HDC);
@@ -52,8 +52,6 @@ thread_local bool g_inside_probe = false;
 
 CreateWindowExA_t g_create_window_ex_a = nullptr;
 CreateWindowExW_t g_create_window_ex_w = nullptr;
-CreateFileA_t g_create_file_a = nullptr;
-CreateFileW_t g_create_file_w = nullptr;
 ReadFile_t g_read_file = nullptr;
 CloseHandle_t g_close_handle = nullptr;
 wglCreateContext_t g_wgl_create_context = nullptr;
@@ -426,32 +424,6 @@ HWND WINAPI hook_create_window_ex_w(DWORD ex_style, LPCWSTR class_name, LPCWSTR 
     return hwnd;
 }
 
-HANDLE WINAPI hook_create_file_a(LPCSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD flags, HANDLE template_file) {
-    HANDLE handle = g_create_file_a(path, access, share, security, creation, flags, template_file);
-    const std::wstring wide_path = widen(path);
-    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(wide_path)) {
-        std::lock_guard<std::mutex> lock(g_handle_mutex);
-        g_handle_paths[handle] = normalized_path(wide_path);
-    }
-    if (should_trace_path(wide_path)) {
-        fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
-    }
-    return handle;
-}
-
-HANDLE WINAPI hook_create_file_w(LPCWSTR path, DWORD access, DWORD share, LPSECURITY_ATTRIBUTES security, DWORD creation, DWORD flags, HANDLE template_file) {
-    HANDLE handle = g_create_file_w(path, access, share, security, creation, flags, template_file);
-    const std::wstring wide_path = path ? path : L"";
-    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(wide_path)) {
-        std::lock_guard<std::mutex> lock(g_handle_mutex);
-        g_handle_paths[handle] = normalized_path(wide_path);
-    }
-    if (should_trace_path(wide_path)) {
-        fileio_line(L"open", handle, wide_path, 0, handle != INVALID_HANDLE_VALUE, handle == INVALID_HANDLE_VALUE ? GetLastError() : 0);
-    }
-    return handle;
-}
-
 BOOL WINAPI hook_read_file(HANDLE file, LPVOID buffer, DWORD bytes_to_read, LPDWORD bytes_read, LPOVERLAPPED overlapped) {
     BOOL ok = g_read_file(file, buffer, bytes_to_read, bytes_read, overlapped);
     std::wstring path;
@@ -465,6 +437,42 @@ BOOL WINAPI hook_read_file(HANDLE file, LPVOID buffer, DWORD bytes_to_read, LPDW
         fileio_line(L"read", file, path, bytes_read ? *bytes_read : bytes_to_read, ok, ok ? 0 : GetLastError());
     }
     return ok;
+}
+
+void __stdcall on_file_opened(const om4t::runtime::FileOpenRequest* request, HANDLE handle, DWORD last_error, void*) {
+    if (!request || !request->path) {
+        return;
+    }
+
+    const std::wstring path = request->path;
+    if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(path)) {
+        std::lock_guard<std::mutex> lock(g_handle_mutex);
+        g_handle_paths[handle] = normalized_path(path);
+    }
+    if (should_trace_path(path)) {
+        fileio_line(L"open", handle, path, 0, handle != INVALID_HANDLE_VALUE, last_error);
+    }
+}
+
+void register_with_runtime() {
+    HMODULE runtime = GetModuleHandleW(L"TweakRuntime.dll");
+    if (!runtime) {
+        log_line(L"TweakRuntime.dll is not loaded; file-open telemetry is unavailable");
+        return;
+    }
+
+    auto register_file_opened = reinterpret_cast<om4t::runtime::RegisterFileOpenedCallbackFn>(
+        GetProcAddress(runtime, om4t::runtime::kRegisterFileOpenedCallbackName));
+    if (!register_file_opened) {
+        log_line(L"TweakRuntime file-opened API was not found");
+        return;
+    }
+
+    if (register_file_opened(1000, &on_file_opened, nullptr)) {
+        log_line(L"Registered file-open telemetry with TweakRuntime");
+    } else {
+        log_line(L"TweakRuntime rejected file-opened callback registration");
+    }
 }
 
 BOOL WINAPI hook_close_handle(HANDLE handle) {
@@ -560,8 +568,7 @@ DWORD WINAPI worker_thread(LPVOID) {
     }
 
     if (g_trace_file_io.load()) {
-        create_hook(L"kernel32.dll", "CreateFileA", reinterpret_cast<LPVOID>(&hook_create_file_a), &g_create_file_a);
-        create_hook(L"kernel32.dll", "CreateFileW", reinterpret_cast<LPVOID>(&hook_create_file_w), &g_create_file_w);
+        register_with_runtime();
         create_hook(L"kernel32.dll", "ReadFile", reinterpret_cast<LPVOID>(&hook_read_file), &g_read_file);
         create_hook(L"kernel32.dll", "CloseHandle", reinterpret_cast<LPVOID>(&hook_close_handle), &g_close_handle);
     }
