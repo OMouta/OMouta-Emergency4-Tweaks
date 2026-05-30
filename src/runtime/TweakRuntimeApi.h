@@ -17,6 +17,7 @@ struct FileOpenRequest {
     DWORD share_mode;
     DWORD creation_disposition;
     DWORD flags_and_attributes;
+    const char* api_name;
 };
 
 using FileOpenCallback = FileOpenAction(__stdcall*)(const FileOpenRequest* request, void* user_data);

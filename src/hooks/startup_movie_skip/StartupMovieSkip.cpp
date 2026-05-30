@@ -48,6 +48,12 @@ std::wstring trim(std::wstring value) {
 }
 
 std::wstring normalized_path(std::wstring path) {
+    if (path.rfind(L"\\??\\", 0) == 0) {
+        path = path.substr(4);
+    }
+    if (path.rfind(L"\\\\?\\", 0) == 0) {
+        path = path.substr(4);
+    }
     for (auto& ch : path) {
         if (ch == L'/') {
             ch = L'\\';
