@@ -39,7 +39,11 @@ std::ofstream g_fileio;
 std::mutex g_log_mutex;
 std::mutex g_file_mutex;
 std::mutex g_handle_mutex;
-std::map<HANDLE, std::wstring> g_handle_paths;
+struct TrackedFile {
+    std::wstring path;
+    std::string api_name;
+};
+std::map<HANDLE, TrackedFile> g_handle_paths;
 std::atomic<bool> g_trace_file_io{true};
 std::atomic<bool> g_trace_game_root_only{true};
 std::atomic<bool> g_trace_game_logfile{false};
@@ -260,12 +264,12 @@ void initialize_logs() {
     {
         std::lock_guard<std::mutex> lock(g_file_mutex);
         g_fileio.open(log_directory() / kFileIoName, std::ios::trunc);
-        g_fileio << "event,tick,handle,path,bytes,ok,last_error\n";
+        g_fileio << "event,tick,api,handle,path,bytes,ok,last_error\n";
         g_fileio.flush();
     }
 }
 
-void fileio_line(const std::wstring& event, HANDLE handle, const std::wstring& path, DWORD bytes, BOOL ok, DWORD error) {
+void fileio_line(const std::wstring& event, const char* api_name, HANDLE handle, const std::wstring& path, DWORD bytes, BOOL ok, DWORD error) {
     if (g_inside_probe || !g_trace_file_io.load()) {
         return;
     }
@@ -275,6 +279,7 @@ void fileio_line(const std::wstring& event, HANDLE handle, const std::wstring& p
     if (g_fileio.is_open()) {
         g_fileio << narrow(event) << ','
                  << GetTickCount64() << ','
+                 << (api_name ? api_name : "") << ','
                  << reinterpret_cast<uintptr_t>(handle) << ",\""
                  << narrow(normalized_path(path)) << "\","
                  << bytes << ','
@@ -433,14 +438,16 @@ HWND WINAPI hook_create_window_ex_w(DWORD ex_style, LPCWSTR class_name, LPCWSTR 
 BOOL WINAPI hook_read_file(HANDLE file, LPVOID buffer, DWORD bytes_to_read, LPDWORD bytes_read, LPOVERLAPPED overlapped) {
     BOOL ok = g_read_file(file, buffer, bytes_to_read, bytes_read, overlapped);
     std::wstring path;
+    std::string api_name;
     {
         std::lock_guard<std::mutex> lock(g_handle_mutex);
         if (auto it = g_handle_paths.find(file); it != g_handle_paths.end()) {
-            path = it->second;
+            path = it->second.path;
+            api_name = it->second.api_name;
         }
     }
     if (!path.empty()) {
-        fileio_line(L"read", file, path, bytes_read ? *bytes_read : bytes_to_read, ok, ok ? 0 : GetLastError());
+        fileio_line(L"read", api_name.c_str(), file, path, bytes_read ? *bytes_read : bytes_to_read, ok, ok ? 0 : GetLastError());
     }
     return ok;
 }
@@ -453,10 +460,10 @@ void __stdcall on_file_opened(const om4t::runtime::FileOpenRequest* request, HAN
     const std::wstring path = request->path;
     if (handle != INVALID_HANDLE_VALUE && !g_inside_probe && should_trace_path(path)) {
         std::lock_guard<std::mutex> lock(g_handle_mutex);
-        g_handle_paths[handle] = normalized_path(path);
+        g_handle_paths[handle] = TrackedFile{normalized_path(path), request->api_name ? request->api_name : ""};
     }
     if (should_trace_path(path)) {
-        fileio_line(L"open", handle, path, 0, handle != INVALID_HANDLE_VALUE, last_error);
+        fileio_line(L"open", request->api_name, handle, path, 0, handle != INVALID_HANDLE_VALUE, last_error);
     }
 }
 
@@ -483,15 +490,17 @@ void register_with_runtime() {
 
 BOOL WINAPI hook_close_handle(HANDLE handle) {
     std::wstring path;
+    std::string api_name;
     {
         std::lock_guard<std::mutex> lock(g_handle_mutex);
         if (auto it = g_handle_paths.find(handle); it != g_handle_paths.end()) {
-            path = it->second;
+            path = it->second.path;
+            api_name = it->second.api_name;
             g_handle_paths.erase(it);
         }
     }
     if (!path.empty()) {
-        fileio_line(L"close", handle, path, 0, TRUE, 0);
+        fileio_line(L"close", api_name.c_str(), handle, path, 0, TRUE, 0);
     }
     return g_close_handle(handle);
 }
