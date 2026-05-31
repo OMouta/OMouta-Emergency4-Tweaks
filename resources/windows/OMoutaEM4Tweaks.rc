@@ -1,3 +1,4 @@
 #include "resource.h"
 
 IDI_OMouta_EM4_TWEAKS ICON "OMoutaEM4Tweaks.ico"
+IDB_OMouta_TWEAKS_LOGO RCDATA "../../assets/OMoutaTweaksIcon.png"

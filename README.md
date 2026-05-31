@@ -18,6 +18,7 @@ Current tweak packages:
 
 | Tweak | Description |
 | --- | --- |
+| Alt-Tab Safe | Runs EM4 in borderless desktop mode and suppresses exclusive fullscreen display changes. |
 | Engine Probe | Collects observe-only runtime diagnostics for future tweak development. |
 | Startup Movie Skip | Skips startup intro movies while leaving menu/background videos alone. |
 

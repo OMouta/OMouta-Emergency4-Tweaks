@@ -32,6 +32,7 @@ target_compile_definitions(OMoutaEM4Tweaks PRIVATE
 target_link_libraries(OMoutaEM4Tweaks PRIVATE
     comdlg32
     comctl32
+    gdiplus
     kernel32
     shell32
     user32
