@@ -20,6 +20,7 @@ Current tweak packages:
 | --- | --- |
 | Alt-Tab Safe | Runs EM4 in borderless desktop mode and suppresses exclusive fullscreen display changes. |
 | Engine Probe | Collects observe-only runtime diagnostics for future tweak development. |
+| Launch Overlay | Shows a short in-game OMoutaEM4Tweaks splash with the loaded tweak list. |
 | Startup Movie Skip | Skips startup intro movies while leaving menu/background videos alone. |
 
 ## Installation
@@ -45,6 +46,10 @@ The settings window has three tabs:
 | General | Launcher-level settings such as the `em4.exe` path. |
 | Tweaks | Enable installed tweaks and edit each tweak's manifest-defined settings. |
 | About | Basic package and launcher information. |
+
+The General tab also includes a 4 GB Patch Helper. It detects whether the
+selected `em4.exe` has the Large Address Aware flag, can apply the flag with a
+backup, and can restore that backup later.
 
 Settings are applied only when you click **Save & Launch** or **Save & Exit**.
 Closing the window or clicking **Exit** discards unsaved changes.

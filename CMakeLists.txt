@@ -18,6 +18,7 @@ add_executable(OMoutaEM4Tweaks
     src/launcher/main.cpp
     src/launcher/ConsoleMenu.cpp
     src/launcher/GuiLauncher.cpp
+    src/launcher/PePatch.cpp
     src/launcher/ProcessLauncher.cpp
     src/launcher/TweakPackage.cpp
     resources/windows/OMoutaEM4Tweaks.rc

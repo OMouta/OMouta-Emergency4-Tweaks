@@ -3,6 +3,7 @@
 #endif
 
 #include "GuiLauncher.h"
+#include "PePatch.h"
 
 #include "../shared/AppPaths.h"
 #include "../shared/StringUtil.h"
@@ -39,6 +40,8 @@ constexpr int kBrowseButton = 2002;
 constexpr int kSaveLaunchButton = 2003;
 constexpr int kSaveExitButton = 2004;
 constexpr int kExitButton = 2005;
+constexpr int kPatch4GbButton = 2006;
+constexpr int kRestore4GbButton = 2007;
 constexpr int kEm4Path = 2100;
 constexpr int kTab = 2200;
 constexpr int kTweakBase = 3000;
@@ -82,6 +85,9 @@ struct GuiState {
     HBRUSH header_brush = nullptr;
     HWND tab = nullptr;
     HWND em4_path = nullptr;
+    HWND large_address_status = nullptr;
+    HWND patch_4gb = nullptr;
+    HWND restore_4gb = nullptr;
     int active_tab = 0;
     int tweak_scroll = 0;
     int tweak_scroll_max = 0;
@@ -210,6 +216,7 @@ std::wstring setting_value(const Config& config, const TweakSetting& setting) {
 }
 
 void layout_settings(HWND window, GuiState& state);
+void update_large_address_status(GuiState& state);
 
 void update_splash_status(GuiState& state) {
     InvalidateRect(state.window, nullptr, FALSE);
@@ -350,7 +357,48 @@ void show_settings(GuiState& state) {
     set_visible(state.action_controls, true);
     TabCtrl_SetCurSel(state.tab, 0);
     select_tab(state, 0);
+    update_large_address_status(state);
     RedrawWindow(state.window, nullptr, nullptr, RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+}
+
+std::filesystem::path current_em4_path(const GuiState& state) {
+    std::filesystem::path path = trim(window_text(state.em4_path));
+    if (path.is_relative()) {
+        path = module_dir() / path;
+    }
+    return std::filesystem::absolute(path);
+}
+
+void update_large_address_status(GuiState& state) {
+    if (!state.large_address_status) {
+        return;
+    }
+
+    const auto info = inspect_large_address_aware(current_em4_path(state));
+    std::wstring status = L"Memory headroom: " + info.message;
+    if (info.backup_exists) {
+        status += L" Backup available.";
+    }
+
+    SetWindowTextW(state.large_address_status, status.c_str());
+    EnableWindow(state.patch_4gb, info.state == LargeAddressAwareState::Disabled);
+    EnableWindow(state.restore_4gb, info.backup_exists);
+}
+
+void patch_4gb(GuiState& state) {
+    std::wstring error;
+    if (!patch_large_address_aware(current_em4_path(state), error)) {
+        MessageBoxW(state.window, error.c_str(), kBrand, MB_OK | MB_ICONERROR);
+    }
+    update_large_address_status(state);
+}
+
+void restore_4gb(GuiState& state) {
+    std::wstring error;
+    if (!restore_large_address_backup(current_em4_path(state), error)) {
+        MessageBoxW(state.window, error.c_str(), kBrand, MB_OK | MB_ICONERROR);
+    }
+    update_large_address_status(state);
 }
 
 void browse_for_em4(GuiState& state) {
@@ -368,6 +416,7 @@ void browse_for_em4(GuiState& state) {
 
     if (GetOpenFileNameW(&ofn)) {
         SetWindowTextW(state.em4_path, path.data());
+        update_large_address_status(state);
     }
 }
 
@@ -424,6 +473,15 @@ void add_general_controls(HWND window, GuiState& state) {
     state.em4_path = make_edit(window, state.draft_config.em4_path.wstring(), kEm4Path, 34, 198, 560, 26);
     state.general_controls.push_back(state.em4_path);
     state.general_controls.push_back(make_control(window, L"BUTTON", L"Browse", BS_PUSHBUTTON | BS_FLAT, kBrowseButton, 608, 197, 100, 28, state.ui_font));
+
+    state.general_controls.push_back(make_control(window, L"STATIC", L"4 GB Patch Helper", SS_LEFT, 0, 34, 256, 220, 20, state.section_font));
+    state.general_controls.push_back(make_control(window, L"STATIC", L"Large Address Aware lets 32-bit EM4 use more memory on modern Windows.", SS_LEFT, 0, 34, 282, 620, 20, state.ui_font));
+    state.large_address_status = make_control(window, L"STATIC", L"", SS_LEFT, 0, 34, 310, 620, 22, state.ui_font);
+    state.general_controls.push_back(state.large_address_status);
+    state.patch_4gb = make_control(window, L"BUTTON", L"Apply 4 GB Patch", BS_PUSHBUTTON | BS_FLAT, kPatch4GbButton, 34, 342, 138, 30, state.ui_font);
+    state.restore_4gb = make_control(window, L"BUTTON", L"Restore Backup", BS_PUSHBUTTON | BS_FLAT, kRestore4GbButton, 184, 342, 126, 30, state.ui_font);
+    state.general_controls.push_back(state.patch_4gb);
+    state.general_controls.push_back(state.restore_4gb);
 }
 
 void add_tweak_controls(HWND window, GuiState& state) {
@@ -652,12 +710,22 @@ LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         if (!state) {
             break;
         }
+        if (LOWORD(wparam) == kEm4Path && HIWORD(wparam) == EN_CHANGE) {
+            update_large_address_status(*state);
+            return 0;
+        }
         switch (LOWORD(wparam)) {
         case kSettingsButton:
             show_settings(*state);
             return 0;
         case kBrowseButton:
             browse_for_em4(*state);
+            return 0;
+        case kPatch4GbButton:
+            patch_4gb(*state);
+            return 0;
+        case kRestore4GbButton:
+            restore_4gb(*state);
             return 0;
         case kSaveLaunchButton:
             commit_and_finish(*state, GuiResult::Launch);

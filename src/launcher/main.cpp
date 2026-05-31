@@ -41,6 +41,20 @@ int fail(om4t::Logger& log, const std::wstring& message, DWORD code = 1) {
     return static_cast<int>(code);
 }
 
+void update_launch_overlay_config(om4t::Config& config, const std::vector<om4t::launcher::TweakPackage>& packages) {
+    std::wstring loaded;
+    for (const auto& package : packages) {
+        if (!package.enabled) {
+            continue;
+        }
+        if (!loaded.empty()) {
+            loaded += L"|";
+        }
+        loaded += package.name;
+    }
+    config.sections[L"LaunchOverlay"][L"loaded_tweaks"] = loaded;
+}
+
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -77,6 +91,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         return 0;
     }
     launcher::sync_config_from_packages(packages, config);
+    update_launch_overlay_config(config, packages);
     write_config(cfg_path, config);
 
     if (config.em4_path.empty() || !file_exists(config.em4_path)) {
