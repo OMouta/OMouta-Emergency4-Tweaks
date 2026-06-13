@@ -18,7 +18,7 @@ Current tweak packages:
 
 | Tweak | Description |
 | --- | --- |
-| Alt-Tab Safe | Runs EM4 in borderless desktop mode and suppresses exclusive fullscreen display changes. |
+| Alt-Tab Safe | Runs EM4 in borderless desktop mode, suppresses exclusive fullscreen display changes, and prevents focus-loss minimization during screenshots. |
 | Engine Probe | Collects observe-only runtime diagnostics for future tweak development. |
 | Launch Overlay | Shows a short in-game OMoutaEM4Tweaks splash with the loaded tweak list. |
 | Startup Movie Skip | Skips startup intro movies while leaving menu/background videos alone. |

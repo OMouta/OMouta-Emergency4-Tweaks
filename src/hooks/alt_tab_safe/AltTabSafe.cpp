@@ -29,13 +29,16 @@ using SetWindowLongW_t = LONG(WINAPI*)(HWND, int, LONG);
 using SetWindowLongPtrA_t = LONG_PTR(WINAPI*)(HWND, int, LONG_PTR);
 using SetWindowLongPtrW_t = LONG_PTR(WINAPI*)(HWND, int, LONG_PTR);
 using SetWindowPos_t = BOOL(WINAPI*)(HWND, HWND, int, int, int, int, UINT);
+using ShowWindow_t = BOOL(WINAPI*)(HWND, int);
 
 std::wofstream g_log;
 std::mutex g_log_mutex;
 std::mutex g_window_mutex;
 std::atomic<bool> g_force_borderless{true};
 std::atomic<bool> g_block_display_changes{true};
+std::atomic<bool> g_prevent_focus_minimize{true};
 HWND g_game_window = nullptr;
+WNDPROC g_game_window_proc = nullptr;
 thread_local bool g_inside_hook = false;
 
 ChangeDisplaySettingsA_t g_change_display_settings_a = nullptr;
@@ -49,6 +52,7 @@ SetWindowLongW_t g_set_window_long_w = nullptr;
 SetWindowLongPtrA_t g_set_window_long_ptr_a = nullptr;
 SetWindowLongPtrW_t g_set_window_long_ptr_w = nullptr;
 SetWindowPos_t g_set_window_pos = nullptr;
+ShowWindow_t g_show_window = nullptr;
 
 std::wstring pad(WORD value) {
     return value < 10 ? L"0" + std::to_wstring(value) : std::to_wstring(value);
@@ -157,6 +161,9 @@ void load_config() {
         if (auto it = section->second.find(L"block_display_changes"); it != section->second.end()) {
             g_block_display_changes = parse_bool(it->second, true);
         }
+        if (auto it = section->second.find(L"prevent_focus_minimize"); it != section->second.end()) {
+            g_prevent_focus_minimize = parse_bool(it->second, true);
+        }
     }
 }
 
@@ -207,6 +214,61 @@ bool should_adjust_create_window(HWND parent, DWORD style, int width, int height
 bool is_tracked_game_window(HWND hwnd) {
     std::lock_guard<std::mutex> lock(g_window_mutex);
     return hwnd && hwnd == g_game_window;
+}
+
+bool should_block_minimize(HWND hwnd) {
+    return g_prevent_focus_minimize.load() && is_tracked_game_window(hwnd);
+}
+
+LRESULT CALLBACK game_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+    if (!g_inside_hook && should_block_minimize(hwnd)) {
+        if (message == WM_SYSCOMMAND && ((wparam & 0xfff0) == SC_MINIMIZE)) {
+            log_line(L"Suppressed SC_MINIMIZE");
+            return 0;
+        }
+        if (message == WM_WINDOWPOSCHANGING && lparam) {
+            auto* pos = reinterpret_cast<WINDOWPOS*>(lparam);
+            if (pos->flags & SWP_HIDEWINDOW) {
+                pos->flags &= ~SWP_HIDEWINDOW;
+                log_line(L"Suppressed WM_WINDOWPOSCHANGING SWP_HIDEWINDOW");
+            }
+        }
+        if (message == WM_SIZE && wparam == SIZE_MINIMIZED) {
+            log_line(L"Suppressed WM_SIZE SIZE_MINIMIZED");
+            return 0;
+        }
+    }
+
+    WNDPROC original = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(g_window_mutex);
+        original = g_game_window_proc;
+    }
+
+    return original ? CallWindowProcW(original, hwnd, message, wparam, lparam) : DefWindowProcW(hwnd, message, wparam, lparam);
+}
+
+void subclass_game_window(HWND hwnd, const wchar_t* source) {
+    if (!g_prevent_focus_minimize.load() || !hwnd) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(g_window_mutex);
+    if (hwnd != g_game_window || g_game_window_proc) {
+        return;
+    }
+
+    g_inside_hook = true;
+    const auto previous = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&game_window_proc)));
+    g_inside_hook = false;
+
+    if (previous) {
+        g_game_window_proc = previous;
+        log_line(std::wstring(L"Subclassed game window from ") + source);
+    } else {
+        log_line(std::wstring(L"Could not subclass game window from ") + source
+            + L" GetLastError=" + std::to_wstring(GetLastError()));
+    }
 }
 
 void remember_game_window(HWND hwnd, const wchar_t* source) {
@@ -314,6 +376,7 @@ HWND WINAPI hook_create_window_ex_a(DWORD ex_style, LPCSTR class_name, LPCSTR wi
     if (should_adjust) {
         remember_game_window(hwnd, L"CreateWindowExA");
         apply_borderless(hwnd, desktop_rect_for_window_rect(x, y, width, height), L"CreateWindowExA");
+        subclass_game_window(hwnd, L"CreateWindowExA");
     }
     return hwnd;
 }
@@ -328,6 +391,7 @@ HWND WINAPI hook_create_window_ex_w(DWORD ex_style, LPCWSTR class_name, LPCWSTR 
     if (should_adjust) {
         remember_game_window(hwnd, L"CreateWindowExW");
         apply_borderless(hwnd, desktop_rect_for_window_rect(x, y, width, height), L"CreateWindowExW");
+        subclass_game_window(hwnd, L"CreateWindowExW");
     }
     return hwnd;
 }
@@ -338,6 +402,16 @@ LONG WINAPI hook_set_window_long_a(HWND hwnd, int index, LONG value) {
             value = static_cast<LONG>(borderless_style(value));
         } else if (index == GWL_EXSTYLE) {
             value = static_cast<LONG>(borderless_ex_style(value));
+        } else if (index == GWL_WNDPROC && g_prevent_focus_minimize.load()) {
+            WNDPROC previous = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(g_window_mutex);
+                previous = g_game_window_proc;
+                g_game_window_proc = reinterpret_cast<WNDPROC>(value);
+            }
+
+            const LONG result = g_set_window_long_a(hwnd, index, reinterpret_cast<LONG>(&game_window_proc));
+            return result == reinterpret_cast<LONG>(&game_window_proc) && previous ? reinterpret_cast<LONG>(previous) : result;
         }
     }
     return g_set_window_long_a(hwnd, index, value);
@@ -349,6 +423,16 @@ LONG WINAPI hook_set_window_long_w(HWND hwnd, int index, LONG value) {
             value = static_cast<LONG>(borderless_style(value));
         } else if (index == GWL_EXSTYLE) {
             value = static_cast<LONG>(borderless_ex_style(value));
+        } else if (index == GWL_WNDPROC && g_prevent_focus_minimize.load()) {
+            WNDPROC previous = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(g_window_mutex);
+                previous = g_game_window_proc;
+                g_game_window_proc = reinterpret_cast<WNDPROC>(value);
+            }
+
+            const LONG result = g_set_window_long_w(hwnd, index, reinterpret_cast<LONG>(&game_window_proc));
+            return result == reinterpret_cast<LONG>(&game_window_proc) && previous ? reinterpret_cast<LONG>(previous) : result;
         }
     }
     return g_set_window_long_w(hwnd, index, value);
@@ -360,6 +444,16 @@ LONG_PTR WINAPI hook_set_window_long_ptr_a(HWND hwnd, int index, LONG_PTR value)
             value = borderless_style(value);
         } else if (index == GWL_EXSTYLE) {
             value = borderless_ex_style(value);
+        } else if (index == GWLP_WNDPROC && g_prevent_focus_minimize.load()) {
+            WNDPROC previous = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(g_window_mutex);
+                previous = g_game_window_proc;
+                g_game_window_proc = reinterpret_cast<WNDPROC>(value);
+            }
+
+            const LONG_PTR result = g_set_window_long_ptr_a(hwnd, index, reinterpret_cast<LONG_PTR>(&game_window_proc));
+            return result == reinterpret_cast<LONG_PTR>(&game_window_proc) && previous ? reinterpret_cast<LONG_PTR>(previous) : result;
         }
     }
     return g_set_window_long_ptr_a(hwnd, index, value);
@@ -371,6 +465,16 @@ LONG_PTR WINAPI hook_set_window_long_ptr_w(HWND hwnd, int index, LONG_PTR value)
             value = borderless_style(value);
         } else if (index == GWL_EXSTYLE) {
             value = borderless_ex_style(value);
+        } else if (index == GWLP_WNDPROC && g_prevent_focus_minimize.load()) {
+            WNDPROC previous = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(g_window_mutex);
+                previous = g_game_window_proc;
+                g_game_window_proc = reinterpret_cast<WNDPROC>(value);
+            }
+
+            const LONG_PTR result = g_set_window_long_ptr_w(hwnd, index, reinterpret_cast<LONG_PTR>(&game_window_proc));
+            return result == reinterpret_cast<LONG_PTR>(&game_window_proc) && previous ? reinterpret_cast<LONG_PTR>(previous) : result;
         }
     }
     return g_set_window_long_ptr_w(hwnd, index, value);
@@ -378,6 +482,11 @@ LONG_PTR WINAPI hook_set_window_long_ptr_w(HWND hwnd, int index, LONG_PTR value)
 
 BOOL WINAPI hook_set_window_pos(HWND hwnd, HWND insert_after, int x, int y, int cx, int cy, UINT flags) {
     if (!g_inside_hook && is_tracked_game_window(hwnd)) {
+        if (g_prevent_focus_minimize.load() && (flags & SWP_HIDEWINDOW)) {
+            flags &= ~SWP_HIDEWINDOW;
+            log_line(L"Suppressed SetWindowPos SWP_HIDEWINDOW");
+        }
+
         RECT current{};
         GetWindowRect(hwnd, &current);
         const RECT rect = desktop_rect_for_window_rect(current.left, current.top, current.right - current.left, current.bottom - current.top);
@@ -390,6 +499,17 @@ BOOL WINAPI hook_set_window_pos(HWND hwnd, HWND insert_after, int x, int y, int 
         flags |= SWP_FRAMECHANGED | SWP_NOOWNERZORDER;
     }
     return g_set_window_pos(hwnd, insert_after, x, y, cx, cy, flags);
+}
+
+BOOL WINAPI hook_show_window(HWND hwnd, int command) {
+    if (!g_inside_hook && should_block_minimize(hwnd)) {
+        if (command == SW_MINIMIZE || command == SW_SHOWMINIMIZED || command == SW_SHOWMINNOACTIVE || command == SW_FORCEMINIMIZE) {
+            log_line(L"Suppressed ShowWindow minimize command=" + std::to_wstring(command));
+            return TRUE;
+        }
+    }
+
+    return g_show_window(hwnd, command);
 }
 
 void log_hook_result(const char* name, MH_STATUS status) {
@@ -411,7 +531,8 @@ DWORD WINAPI worker_thread(LPVOID) {
     load_config();
     log_line(L"DLL loaded");
     log_line(L"Config force_borderless=" + std::to_wstring(g_force_borderless.load())
-        + L" block_display_changes=" + std::to_wstring(g_block_display_changes.load()));
+        + L" block_display_changes=" + std::to_wstring(g_block_display_changes.load())
+        + L" prevent_focus_minimize=" + std::to_wstring(g_prevent_focus_minimize.load()));
 
     MH_STATUS status = MH_Initialize();
     if (status != MH_OK) {
@@ -430,6 +551,7 @@ DWORD WINAPI worker_thread(LPVOID) {
     create_hook(L"user32.dll", "SetWindowLongPtrA", reinterpret_cast<LPVOID>(&hook_set_window_long_ptr_a), &g_set_window_long_ptr_a);
     create_hook(L"user32.dll", "SetWindowLongPtrW", reinterpret_cast<LPVOID>(&hook_set_window_long_ptr_w), &g_set_window_long_ptr_w);
     create_hook(L"user32.dll", "SetWindowPos", reinterpret_cast<LPVOID>(&hook_set_window_pos), &g_set_window_pos);
+    create_hook(L"user32.dll", "ShowWindow", reinterpret_cast<LPVOID>(&hook_show_window), &g_show_window);
 
     status = MH_EnableHook(MH_ALL_HOOKS);
     if (status != MH_OK) {
