@@ -11,8 +11,8 @@ runtime.
 ## What It Does
 
 Start the game through `OMoutaEM4Tweaks.exe` instead of launching `em4.exe`
-directly. The launcher opens a small settings window, loads the enabled tweaks,
-then starts EM4.
+directly. The launcher opens a splash screen where you pick what to start, loads
+the enabled tweaks, then starts EM4.
 
 Current tweak packages:
 
@@ -35,24 +35,37 @@ OMoutaEM4Tweaks.exe
 
 ## Launcher
 
-When the launcher opens, it shows a compact countdown screen. If you do
-nothing, the game launches after five seconds. Click **Settings** during the
-countdown to configure the launcher.
+The launcher opens on a splash screen with three choices:
 
-The settings window has three tabs:
+| Choice | What it does |
+| --- | --- |
+| Play Game | Starts EMERGENCY 4 with the enabled tweaks injected. |
+| Open Editor | Starts the EMERGENCY 4 editor, which is `em4.exe -editor`. |
+| Tweak Settings | Opens the settings window. |
 
-| Tab | Purpose |
+Press `Enter` to play or `Esc` to quit. Drag the splash by its background to
+move it.
+
+The editor is deliberately started **without** tweaks. The tweak packages hook
+the game, not the editor, and things like the forced borderless window would get
+in the way there. The 4 GB patch still applies, because the editor is the same
+executable.
+
+The settings window has three pages:
+
+| Page | Purpose |
 | --- | --- |
 | General | Launcher-level settings such as the `em4.exe` path. |
 | Tweaks | Enable installed tweaks and edit each tweak's manifest-defined settings. |
-| About | Basic package and launcher information. |
+| About | Package information and shortcuts to the logs, hooks and config file. |
 
-The General tab also includes a 4 GB Patch Helper. It detects whether the
+The General page also includes a 4 GB Patch Helper. It detects whether the
 selected `em4.exe` has the Large Address Aware flag, can apply the flag with a
 backup, and can restore that backup later.
 
-Settings are applied only when you click **Save & Launch** or **Save & Exit**.
-Closing the window or clicking **Exit** discards unsaved changes.
+Settings are applied only when you click **Play game** or **Save & close**.
+**Cancel**, `Esc` or closing the window discards unsaved changes and returns to
+the splash screen.
 
 ## Settings
 

@@ -2,3 +2,6 @@
 
 IDI_OMouta_EM4_TWEAKS ICON "OMoutaEM4Tweaks.ico"
 IDB_OMouta_TWEAKS_LOGO RCDATA "../../assets/OMoutaTweaksIcon.png"
+
+/* CREATEPROCESS_MANIFEST_RESOURCE_ID / RT_MANIFEST */
+1 24 "OMoutaEM4Tweaks.manifest"

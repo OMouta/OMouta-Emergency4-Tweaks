@@ -10,10 +10,13 @@
 namespace om4t::launcher {
 
 enum class GuiResult {
-    Launch,
+    PlayGame,
+    OpenEditor,
     Cancel
 };
 
+// Shows the splash screen. Returns what the user picked; `config` and `packages`
+// reflect any changes saved from the settings screen.
 GuiResult show_launcher_window(
     Config& config,
     std::vector<TweakPackage>& packages,

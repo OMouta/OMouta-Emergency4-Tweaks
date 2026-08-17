@@ -1,3 +1,4 @@
+#include "GamePaths.h"
 #include "GuiLauncher.h"
 #include "ProcessLauncher.h"
 #include "TweakPackage.h"
@@ -10,30 +11,6 @@
 #include <shellapi.h>
 
 namespace {
-
-std::filesystem::path resolve_em4_path(std::filesystem::path configured_path, const std::filesystem::path& root) {
-    if (configured_path.empty()) {
-        configured_path = L"em4.exe";
-    }
-
-    if (configured_path.is_relative()) {
-        configured_path = root / configured_path;
-    }
-
-    if (std::filesystem::is_directory(configured_path)) {
-        const auto upper = configured_path / L"Em4.exe";
-        if (om4t::file_exists(upper)) {
-            return std::filesystem::absolute(upper);
-        }
-
-        const auto lower = configured_path / L"em4.exe";
-        if (om4t::file_exists(lower)) {
-            return std::filesystem::absolute(lower);
-        }
-    }
-
-    return std::filesystem::absolute(configured_path);
-}
 
 int fail(om4t::Logger& log, const std::wstring& message, DWORD code = 1) {
     log.write(message);
@@ -77,7 +54,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     if (argv) {
         LocalFree(argv);
     }
-    config.em4_path = resolve_em4_path(config.em4_path, root);
+    config.em4_path = launcher::resolve_em4_path(config.em4_path, root);
 
     auto packages = launcher::discover_tweak_packages(root, log);
     launcher::apply_config_to_packages(config, packages);
@@ -86,16 +63,27 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         write_config(cfg_path, config);
     }
 
-    if (launcher::show_launcher_window(config, packages, cfg_path) == launcher::GuiResult::Cancel) {
+    const auto choice = launcher::show_launcher_window(config, packages, cfg_path);
+    if (choice == launcher::GuiResult::Cancel) {
         log.write(L"Launch cancelled by user");
         return 0;
     }
+
+    // The path can be edited in the settings screen, so re-resolve it before use.
+    config.em4_path = launcher::resolve_em4_path(config.em4_path, root);
     launcher::sync_config_from_packages(packages, config);
     update_launch_overlay_config(config, packages);
     write_config(cfg_path, config);
 
     if (config.em4_path.empty() || !file_exists(config.em4_path)) {
         return fail(log, L"Could not find em4.exe. Edit settings and set the correct path.");
+    }
+
+    if (choice == launcher::GuiResult::OpenEditor) {
+        if (!launcher::launch_editor(config.em4_path, log)) {
+            return fail(log, L"Failed to start the EMERGENCY 4 editor.", 3);
+        }
+        return 0;
     }
 
     const auto enabled_hooks = launcher::enabled_hook_paths(packages);

@@ -58,6 +58,37 @@ bool inject_dll(HANDLE process, const std::filesystem::path& dll_path, Logger& l
 
 } // namespace
 
+bool launch_editor(const std::filesystem::path& em4_path, Logger& log) {
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    const auto absolute_path = std::filesystem::absolute(em4_path);
+    std::wstring command_line = quote(absolute_path) + L" -editor";
+    const auto working_dir = absolute_path.parent_path().wstring();
+
+    log.write(L"Starting editor: " + command_line);
+    const BOOL created = CreateProcessW(
+        absolute_path.c_str(),
+        command_line.data(),
+        nullptr,
+        nullptr,
+        FALSE,
+        0,
+        nullptr,
+        working_dir.c_str(),
+        &si,
+        &pi);
+
+    if (!created) {
+        log.last_error(L"CreateProcess failed.");
+        return false;
+    }
+
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
+}
+
 bool launch_game_with_hooks(
     const std::filesystem::path& em4_path,
     const std::vector<std::filesystem::path>& enabled_hooks,
